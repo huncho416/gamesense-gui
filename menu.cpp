@@ -103,7 +103,7 @@ ImDrawList* BeginWin(Win& w)
 {
     if (dragging == &w)
     {
-        if (ImGui::IsMouseDown(0)) { w.pos = ImGui::GetMousePos() - dragOff; Snap(w); }
+        if (ImGui::IsMouseDown(0)) { if (ImGui::IsMouseDragging(0, 3)) { w.pos = ImGui::GetMousePos() - dragOff; Snap(w); } }
         else { dragging = nullptr; w.snapped = false; }
     }
     w.pos = {floorf(w.pos.x), floorf(w.pos.y)};
@@ -149,8 +149,39 @@ struct Ctx { ImDrawList* d; ImVec2 a, b; float y; };    // box rect and the text
 const float LX = 39;                                    // left inset of labels and wide widgets
 float WideW(const Ctx& c) { return std::max(30.f, c.b.x - c.a.x - 82); }
 
-// hint: grey text at the right edge ("[M4]").  swatch: colour chip at the right edge, 0 for none.
-bool Checkbox(Ctx& c, const char* label, bool* v, const char* hint = nullptr, ImU32 swatch = 0, bool enabled = true)
+ImGuiKey kEnabled = ImGuiKey_MouseX1, kMenu = ImGuiKey_Delete;
+ImGuiKey* listening;                                    // the bind waiting for a key press, if any
+
+const char* KeyName(ImGuiKey k)
+{
+    switch (k)
+    {
+    case ImGuiKey_None: return "-";
+    case ImGuiKey_MouseLeft: return "M1";
+    case ImGuiKey_MouseRight: return "M2";
+    case ImGuiKey_MouseMiddle: return "M3";
+    case ImGuiKey_MouseX1: return "M4";
+    case ImGuiKey_MouseX2: return "M5";
+    case ImGuiKey_Delete: return "DEL";
+    case ImGuiKey_Insert: return "INS";
+    default: return ImGui::GetKeyName(k);
+    }
+}
+
+// While a bind is listening: Escape clears it, any other key or mouse button sets it.
+void PollBind()
+{
+    ImGuiKey hit = ImGuiKey_None;
+    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_MouseWheelX && hit == ImGuiKey_None; k++)
+        if (ImGui::IsKeyPressed((ImGuiKey)k, false)) hit = (ImGuiKey)k;
+    if (hit == ImGuiKey_None) return;
+    *listening = hit == ImGuiKey_Escape ? ImGuiKey_None : hit;
+    listening = nullptr;
+}
+
+// bind: key shown at the right edge as "[M4]"; click it, then press a key (Escape clears).
+// swatch: colour chip at the right edge; click it for a picker.
+bool Checkbox(Ctx& c, const char* label, bool* v, ImGuiKey* bind = nullptr, ImVec4* swatch = nullptr, bool enabled = true)
 {
     ImVec2 p{c.a.x, c.y};
     ImGui::SetCursorScreenPos({p.x + 15, p.y - 2});
@@ -162,13 +193,33 @@ bool Checkbox(Ctx& c, const char* label, bool* v, const char* hint = nullptr, Im
     if (*v) c.d->AddRectFilledMultiColor(k + ONE, k + ONE * 7, Col(152, 194, 34), Col(152, 194, 34), Col(120, 162, 10), Col(120, 162, 10));
     else { int t = !enabled ? 40 : hov ? 92 : 77, bt = !enabled ? 32 : hov ? 64 : 51; c.d->AddRectFilledMultiColor(k + ONE, k + ONE * 7, Gray(t), Gray(t), Gray(bt), Gray(bt)); }
     Text(c.d, fReg, {p.x + LX, p.y + 1}, Gray(enabled ? 205 : 90), label);
-    if (hint) Text(c.d, fSmall, {c.b.x - 17 - Size(fSmall, hint).x, p.y + 3}, Gray(100), hint);
+    ImGui::PushID(label);
+    if (bind)
+    {
+        char buf[32];
+        snprintf(buf, sizeof buf, "[%s]", listening == bind ? "..." : KeyName(*bind));
+        ImVec2 hs = Size(fSmall, buf), hp{c.b.x - 17 - hs.x, p.y + 3};
+        ImGui::SetCursorScreenPos(hp - ImVec2(3, 3));
+        if (ImGui::InvisibleButton("##bind", hs + ImVec2(6, 6))) listening = bind;
+        else if (listening == bind) PollBind();
+        Text(c.d, fSmall, hp, listening == bind ? Col(152, 194, 34) : Gray(ImGui::IsItemHovered() ? 160 : 100), buf);
+    }
     if (swatch)
     {
         ImVec2 s{c.b.x - 34, p.y + 3};
+        ImGui::SetCursorScreenPos(s - ImVec2(2, 3));
+        if (ImGui::InvisibleButton("##chip", {21, 15}) && enabled) ImGui::OpenPopup("##picker");
         c.d->AddRectFilled(s, s + ImVec2(17, 9), Col(10, 10, 10));
-        c.d->AddRectFilled(s + ONE, s + ImVec2(16, 8), swatch);
+        c.d->AddRectFilled(s + ONE, s + ImVec2(16, 8), ImGui::GetColorU32(*swatch));
+        ImGui::SetNextWindowPos({s.x + 17, s.y + 12}, ImGuiCond_Always, {1, 0});     // opens leftwards, so it stays on screen
+        if (ImGui::BeginPopup("##picker"))
+        {
+            ImGui::SetNextItemWidth(170);
+            ImGui::ColorPicker4("##colour", &swatch->x, ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview | ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaBar);
+            ImGui::EndPopup();
+        }
     }
+    ImGui::PopID();
     c.y += 19;
     return pressed;
 }
@@ -404,7 +455,7 @@ void ControlsBody(Ctx& c)
     static float v[6] = {130, 30, 15, 100, 0, 250};
     static const char* const none[] = {"-", "First", "Second"};
     static const char* const anchor[] = {"-", "Primary", "Secondary"};
-    Checkbox(c, "Enabled", &on, "[M4]");
+    Checkbox(c, "Enabled", &on, &kEnabled);
     Combo(c, "Selection", &a, none, 3);
     Combo(c, "Anchor", &b, anchor, 3);
     Combo(c, "Multi-select", &m, none, 3);
@@ -445,10 +496,11 @@ void OtherBody(Ctx& c)
 {
     static bool o[5];
     static int hide;
+    static ImVec4 dot{1, 1, 1, 1};
     static const char* const items[] = {"-", "Labels", "Icons"};
     Checkbox(c, "Draw outline", &o[0]);
     Checkbox(c, "Draw marker", &o[1]);
-    Checkbox(c, "Center dot", &o[2], nullptr, Col(255, 255, 255));
+    Checkbox(c, "Center dot", &o[2], nullptr, &dot);
     Combo(c, "Hidden items", &hide, items, 3);
     Checkbox(c, "Compact mode", &o[3]);
     Checkbox(c, "Watermark", &o[4]);
@@ -461,9 +513,10 @@ void CategoryBody(Ctx& c)
     static bool o[8] = {true, true, true, true, true, false, true, true};
     static float dist = 750;
     static int style;
+    static ImVec4 col[3] = {{0.59f, 0.75f, 0.14f, 1}, {0.59f, 0.75f, 0.14f, 1}, {0.43f, 0.59f, 0.82f, 1}};
     static const char* const styles[] = {"Corner", "Full"};
-    Checkbox(c, "Show items", &o[0], nullptr, Col(150, 190, 35));
-    Checkbox(c, "Highlight", &o[1], nullptr, Col(150, 190, 35));
+    Checkbox(c, "Show items", &o[0], nullptr, &col[0]);
+    Checkbox(c, "Highlight", &o[1], nullptr, &col[1]);
     Slider(c, "Max distance", &dist, 0, 3000, "%.0fm");
     Checkbox(c, "Name", &o[2]);
     Checkbox(c, "Distance", &o[3]);
@@ -471,14 +524,15 @@ void CategoryBody(Ctx& c)
     Combo(c, "Outline style", &style, styles, 2);
     Checkbox(c, "Dot", &o[5]);
     Checkbox(c, "Bar", &o[6]);
-    Checkbox(c, "Marker", &o[7], nullptr, Col(110, 150, 210));
+    Checkbox(c, "Marker", &o[7], nullptr, &col[2]);
 }
 
 void ExtrasBody(Ctx& c)
 {
     static bool o[2];
-    Checkbox(c, "Type A", &o[0], nullptr, Col(120, 190, 220));
-    Checkbox(c, "Type B", &o[1], nullptr, Col(120, 210, 210));
+    static ImVec4 col[2] = {{0.47f, 0.75f, 0.86f, 1}, {0.47f, 0.82f, 0.82f, 1}};
+    Checkbox(c, "Type A", &o[0], nullptr, &col[0]);
+    Checkbox(c, "Type B", &o[1], nullptr, &col[1]);
 }
 
 void TweaksBody(Ctx& c)
@@ -542,13 +596,14 @@ void InfoBody(Ctx& c)
 void AdjustBody(Ctx& c)
 {
     static bool o[6];
+    static ImVec4 col[2] = {{0.20f, 0.43f, 0.39f, 1}, {0.47f, 0.12f, 0.13f, 1}};
     static const char* const names[] = {"Mark as favourite", "High priority", "Hide", "Disable effects", "Prefer compact", "Override selection"};
     bool en = listSel != 0;                                     // nothing to adjust on the first (own) entry
     ImGui::SetCursorScreenPos({c.a.x + LX + 1, c.a.y + 15});
     ImGui::SetNextItemWidth(WideW(c));
     ImGui::InputTextWithHint("##rename", "Rename item", listRename, sizeof listRename);
     c.y = c.a.y + 41;
-    for (int i = 0; i < 6; i++) Checkbox(c, names[i], &o[i], nullptr, i == 0 ? Col(52, 110, 100) : i == 1 ? Col(120, 30, 34) : 0, en);
+    for (int i = 0; i < 6; i++) Checkbox(c, names[i], &o[i], nullptr, i < 2 ? &col[i] : nullptr, en);
 }
 
 void ActionsBody(Ctx& c)
@@ -572,8 +627,9 @@ void PresetsBody(Ctx& c)
 void SettingsBody(Ctx& c)
 {
     static bool key = true, accent = true;
-    Checkbox(c, "Menu key", &key, "[DEL]");
-    Checkbox(c, "Menu color", &accent, nullptr, Col(152, 194, 34));
+    static ImVec4 col{0.60f, 0.76f, 0.13f, 1};
+    Checkbox(c, "Menu key", &key, &kMenu);
+    Checkbox(c, "Menu color", &accent, nullptr, &col);
 }
 
 void BuildPages()
@@ -691,17 +747,19 @@ void ConsoleWindow()
 
 void KeysWindow()
 {
-    static const char* const binds[][2] = {{"Enabled: ", "M4"}, {"Menu key: ", "DEL"}};
+    const struct { const char* label; ImGuiKey key; bool lit; } binds[] = {{"Enabled: ", kEnabled, kEnabled != ImGuiKey_None && ImGui::IsKeyDown(kEnabled)}, {"Menu key: ", kMenu, true}};
     Win& w = wKeys;
     ImDrawList* d = BeginWin(w);
     ImVec2 a = w.pos + ImVec2(23, 28), b = w.pos + w.size - ImVec2(23, 25);
     GroupBox(d, a, b, "Key binds");
     d->PushClipRect(a + ONE, b - ONE, true);
-    for (int i = 0; i < 2; i++)
+    float y = a.y + 15;
+    for (const auto& bd : binds)
     {
-        ImVec2 p{a.x + 19, a.y + 15 + i * 11.f};
-        Text(d, fReg, p, IM_COL32(205, 205, 205, 255), binds[i][0]);
-        Text(d, fReg, {p.x + Size(fReg, binds[i][0]).x, p.y}, i == 1 ? IM_COL32(178, 200, 80, 255) : IM_COL32(110, 110, 110, 255), binds[i][1]);
+        if (bd.key == ImGuiKey_None) continue;                   // cleared binds are not listed
+        Text(d, fReg, {a.x + 19, y}, IM_COL32(205, 205, 205, 255), bd.label);
+        Text(d, fReg, {a.x + 19 + Size(fReg, bd.label).x, y}, bd.lit ? IM_COL32(178, 200, 80, 255) : IM_COL32(110, 110, 110, 255), KeyName(bd.key));
+        y += 11;
     }
     d->PopClipRect();
     EndWin(w);
@@ -752,6 +810,8 @@ void Menu::Init()
     st.Colors[ImGuiCol_Border] = ImVec4(0.17f, 0.17f, 0.17f, 1);
     st.Colors[ImGuiCol_Text] = ImVec4(0.80f, 0.80f, 0.80f, 1);
     st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.30f, 0.30f, 0.30f, 1);
+    st.PopupRounding = 0;
+    st.Colors[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.09f, 0.09f, 1);
     st.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.60f, 0.76f, 0.13f, 0.35f);
 
     BuildPages();
@@ -760,7 +820,7 @@ void Menu::Init()
 void Menu::Render()
 {
     static bool visible = true;
-    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && !ImGui::GetIO().WantTextInput) visible = !visible;
+    if (kMenu != ImGuiKey_None && !listening && ImGui::IsKeyPressed(kMenu, false) && !ImGui::GetIO().WantTextInput) visible = !visible;
     if (visible) MainWindow();
     if (visible && wConsole.open) ConsoleWindow();
     if (wKeys.open) KeysWindow();

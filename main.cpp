@@ -13,6 +13,7 @@
 #include <tchar.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "menu.h"
 
 // Data
@@ -155,6 +156,10 @@ int main(int, char**)
                 if (shot_frames == 22 && release) io.AddMouseButtonEvent(0, false);
             }
         }
+        if (const char* kn = getenv("MENU_KEY"))                   // test hook: tap a key by its ImGui name, e.g. Escape
+            for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; k++)
+                if (!strcmp(kn, ImGui::GetKeyName((ImGuiKey)k)) && (shot_frames == 25 || shot_frames == 27))
+                    io.AddKeyEvent((ImGuiKey)k, shot_frames == 25);
         ImGui::NewFrame();
 
         Menu::Render();
