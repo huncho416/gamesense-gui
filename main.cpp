@@ -156,6 +156,15 @@ int main(int, char**)
                 if (shot_frames == 22 && release) io.AddMouseButtonEvent(0, false);
             }
         }
+        if (const char* m2 = getenv("MENU_MOUSE2"))                // test hook: a second click at "x,y" late in the run
+        {
+            float x, y;
+            if (sscanf(m2, "%f,%f", &x, &y) == 2 && shot_frames >= 23)
+            {
+                io.AddMousePosEvent(x, y);
+                if (shot_frames == 24 || shot_frames == 26) io.AddMouseButtonEvent(0, shot_frames == 24);
+            }
+        }
         if (const char* kn = getenv("MENU_KEY"))                   // test hook: tap a key by its ImGui name, e.g. Escape
             for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; k++)
                 if (!strcmp(kn, ImGui::GetKeyName((ImGuiKey)k)) && (shot_frames == 25 || shot_frames == 27))

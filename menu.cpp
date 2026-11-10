@@ -25,6 +25,10 @@ const ImU32 BLACK = IM_COL32(10, 10, 10, 255), LINE = IM_COL32(39, 39, 39, 255),
 ImU32 Col(int r, int g, int b, int a = 255) { return IM_COL32(r, g, b, (int)(a * ImGui::GetStyle().Alpha)); }
 ImU32 Gray(int v) { return Col(v, v, v); }
 
+ImVec4 gAccent{0.596f, 0.761f, 0.133f, 1};              // edited by the "Menu color" chip
+// The accent colour. k darkens it (gradient bottoms, idle grips); a is alpha.
+ImU32 Accent(float k = 1, int a = 255) { return Col((int)(gAccent.x * 255 * k), (int)(gAccent.y * 255 * k), (int)(gAccent.z * 255 * k), a); }
+
 void Text(ImDrawList* d, ImFont* f, ImVec2 p, ImU32 c, const char* s, const char* e = nullptr) { d->AddText(f, f->FontSize, p, c, s, e); }
 ImVec2 Size(ImFont* f, const char* s, const char* e = nullptr) { return f->CalcTextSizeA(f->FontSize, FLT_MAX, 0, s, e); }
 
@@ -125,9 +129,9 @@ void EndWin(Win& w)
     ImGui::InvisibleButton("##winGrip", {12, 12});
     bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
     if (ImGui::IsItemActive()) w.size = {floorf(std::max(w.min.x, m.x - w.pos.x + 8)), floorf(std::max(w.min.y, m.y - w.pos.y + 8))};
-    d->AddTriangleFilled({q.x - 6, q.y - 12}, {q.x - 6, q.y - 6}, {q.x - 12, q.y - 6}, hot ? IM_COL32(150, 190, 35, 255) : IM_COL32(106, 122, 48, 255));
+    d->AddTriangleFilled({q.x - 6, q.y - 12}, {q.x - 6, q.y - 6}, {q.x - 12, q.y - 6}, hot ? Accent() : Accent(0.63f));
     if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(0)) { dragging = &w; dragOff = m - w.pos; }
-    if (w.snapped) d->AddRectFilled(w.pos, q, IM_COL32(125, 165, 20, 100));
+    if (w.snapped) d->AddRectFilled(w.pos, q, Accent(0.83f, 100));
     ImGui::End();
 }
 
@@ -190,7 +194,7 @@ bool Checkbox(Ctx& c, const char* label, bool* v, ImGuiKey* bind = nullptr, ImVe
     if (pressed) *v = !*v;
     ImVec2 k{p.x + 19, p.y + 3};
     c.d->AddRectFilled(k, k + ONE * 8, Col(10, 10, 10));
-    if (*v) c.d->AddRectFilledMultiColor(k + ONE, k + ONE * 7, Col(152, 194, 34), Col(152, 194, 34), Col(120, 162, 10), Col(120, 162, 10));
+    if (*v) c.d->AddRectFilledMultiColor(k + ONE, k + ONE * 7, Accent(), Accent(), Accent(0.8f), Accent(0.8f));
     else { int t = !enabled ? 40 : hov ? 92 : 77, bt = !enabled ? 32 : hov ? 64 : 51; c.d->AddRectFilledMultiColor(k + ONE, k + ONE * 7, Gray(t), Gray(t), Gray(bt), Gray(bt)); }
     Text(c.d, fReg, {p.x + LX, p.y + 1}, Gray(enabled ? 205 : 90), label);
     ImGui::PushID(label);
@@ -202,7 +206,7 @@ bool Checkbox(Ctx& c, const char* label, bool* v, ImGuiKey* bind = nullptr, ImVe
         ImGui::SetCursorScreenPos(hp - ImVec2(3, 3));
         if (ImGui::InvisibleButton("##bind", hs + ImVec2(6, 6))) listening = bind;
         else if (listening == bind) PollBind();
-        Text(c.d, fSmall, hp, listening == bind ? Col(152, 194, 34) : Gray(ImGui::IsItemHovered() ? 160 : 100), buf);
+        Text(c.d, fSmall, hp, listening == bind ? Accent() : Gray(ImGui::IsItemHovered() ? 160 : 100), buf);
     }
     if (swatch)
     {
@@ -260,7 +264,7 @@ void Combo(Ctx& c, const char* label, int* v, const char* const items[], int n)
             ImGui::PopID();
             bool h = ImGui::IsItemHovered();
             if (h) pd->AddRectFilled(ia, ia + ImVec2(w - 2, 20), IM_COL32(26, 26, 26, 255));
-            Text(pd, h || i == *v ? fBold : fReg, ia + ImVec2(8, 4), i == *v ? IM_COL32(152, 194, 34, 255) : IM_COL32(205, 205, 205, 255), items[i]);
+            Text(pd, h || i == *v ? fBold : fReg, ia + ImVec2(8, 4), i == *v ? Accent() : IM_COL32(205, 205, 205, 255), items[i]);
         }
         ImGui::EndPopup();
     }
@@ -279,7 +283,7 @@ void Slider(Ctx& c, const char* label, float* v, float lo, float hi, const char*
     float fx = a.x + 1 + floorf((w - 2) * (*v - lo) / (hi - lo));
     c.d->AddRectFilled(a, b, Col(10, 10, 10));
     c.d->AddRectFilledMultiColor(a + ONE, b - ONE, Gray(52), Gray(52), Gray(65), Gray(65));
-    if (fx > a.x + 1) c.d->AddRectFilledMultiColor(a + ONE, {fx, b.y - 1}, Col(152, 192, 36), Col(152, 192, 36), Col(112, 148, 14), Col(112, 148, 14));
+    if (fx > a.x + 1) c.d->AddRectFilledMultiColor(a + ONE, {fx, b.y - 1}, Accent(), Accent(), Accent(0.76f), Accent(0.76f));
     c.d->AddRectFilled({a.x - 5, a.y + 3}, {a.x - 2, a.y + 4}, Gray(97));                       // "-"
     c.d->AddRectFilled({b.x + 2, a.y + 3}, {b.x + 5, a.y + 4}, Gray(97));                       // "+"
     c.d->AddRectFilled({b.x + 3, a.y + 2}, {b.x + 4, a.y + 5}, Gray(97));
@@ -417,7 +421,7 @@ void Layout(ImDrawList* d, Page& pg, ImVec2 a, ImVec2 b)
                 ImGui::InvisibleButton("##grip", {10, 10});
                 bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
                 if (ImGui::IsItemActive()) { bx.h = std::max(40.f, floorf(m.y - ba.y + 3)); if (ci == 0) pg.split = floorf(m.x - a.x + 3); }
-                d->AddTriangleFilled({bb.x - 1, bb.y - 6}, {bb.x - 1, bb.y - 1}, {bb.x - 6, bb.y - 1}, hot ? Col(150, 190, 35) : Col(106, 122, 48));
+                d->AddTriangleFilled({bb.x - 1, bb.y - 6}, {bb.x - 1, bb.y - 1}, {bb.x - 6, bb.y - 1}, hot ? Accent() : Accent(0.63f));
                 ImGui::PopID();
             }
         }
@@ -590,7 +594,7 @@ void InfoBody(Ctx& c)
     char name[16];
     snprintf(name, sizeof name, "Item %d", listSel + 1);
     Text(c.d, fBold, {c.a.x + 89, c.a.y + 19}, Gray(230), name);
-    Text(c.d, fReg, {c.a.x + 89, c.a.y + 30}, Col(152, 194, 34), "Active");
+    Text(c.d, fReg, {c.a.x + 89, c.a.y + 30}, Accent(), "Active");
 }
 
 void AdjustBody(Ctx& c)
@@ -627,9 +631,8 @@ void PresetsBody(Ctx& c)
 void SettingsBody(Ctx& c)
 {
     static bool key = true, accent = true;
-    static ImVec4 col{0.60f, 0.76f, 0.13f, 1};
     Checkbox(c, "Menu key", &key, &kMenu);
-    Checkbox(c, "Menu color", &accent, nullptr, &col);
+    Checkbox(c, "Menu color", &accent, nullptr, &gAccent);
 }
 
 void BuildPages()
@@ -758,7 +761,7 @@ void KeysWindow()
     {
         if (bd.key == ImGuiKey_None) continue;                   // cleared binds are not listed
         Text(d, fReg, {a.x + 19, y}, IM_COL32(205, 205, 205, 255), bd.label);
-        Text(d, fReg, {a.x + 19 + Size(fReg, bd.label).x, y}, bd.lit ? IM_COL32(178, 200, 80, 255) : IM_COL32(110, 110, 110, 255), KeyName(bd.key));
+        Text(d, fReg, {a.x + 19 + Size(fReg, bd.label).x, y}, bd.lit ? Accent() : IM_COL32(110, 110, 110, 255), KeyName(bd.key));
         y += 11;
     }
     d->PopClipRect();
@@ -812,7 +815,6 @@ void Menu::Init()
     st.Colors[ImGuiCol_TextDisabled] = ImVec4(0.30f, 0.30f, 0.30f, 1);
     st.PopupRounding = 0;
     st.Colors[ImGuiCol_PopupBg] = ImVec4(0.09f, 0.09f, 0.09f, 1);
-    st.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.60f, 0.76f, 0.13f, 0.35f);
 
     BuildPages();
 }
@@ -820,6 +822,7 @@ void Menu::Init()
 void Menu::Render()
 {
     static bool visible = true;
+    ImGui::GetStyle().Colors[ImGuiCol_TextSelectedBg] = ImVec4(gAccent.x, gAccent.y, gAccent.z, 0.35f);
     if (kMenu != ImGuiKey_None && !listening && ImGui::IsKeyPressed(kMenu, false) && !ImGui::GetIO().WantTextInput) visible = !visible;
     if (visible) MainWindow();
     if (visible && wConsole.open) ConsoleWindow();
